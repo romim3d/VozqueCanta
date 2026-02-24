@@ -9,7 +9,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<!-- Storage SDK removido: usando Realtime Database para áudio (plano gratuito) -->
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
@@ -105,6 +104,14 @@ canvas.wv{width:100%;height:100%;display:block}
 .audio-ready{font-size:13px;color:var(--accent3);font-family:'Space Mono',monospace;margin-bottom:12px}
 .audio-player{width:100%;border-radius:8px}
 
+/* ─── UPLOAD PROGRESS BAR (visible to listener) ─── */
+.listener-upload-progress{display:none;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px}
+.lup-label{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent3);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.lup-label .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite;flex-shrink:0}
+.lup-bar-bg{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.lup-bar{height:100%;width:0%;background:linear-gradient(to right,var(--accent),var(--accent3));border-radius:3px;transition:width .3s}
+.lup-pct{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);text-align:right;margin-top:4px}
+
 /* key grid */
 .keygrid{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;margin-bottom:10px}
 @media(max-width:600px){.keygrid{grid-template-columns:repeat(6,1fr)}}
@@ -116,7 +123,7 @@ canvas.wv{width:100%;height:100%;display:block}
 .kbtn.active .n{color:var(--accent)}
 .theory{font-family:'Space Mono',monospace;font-size:11px;color:var(--dim);text-align:center;margin-top:6px}
 
-/* channels */
+/* channels — simplified */
 .channels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 @media(max-width:680px){.channels{grid-template-columns:1fr}}
 .ch{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;transition:border-color .3s}
@@ -137,26 +144,6 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
 .ch-f input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);cursor:pointer}
 .ch-t input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent2);border:2px solid var(--bg);cursor:pointer}
 .ch-5 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent3);border:2px solid var(--bg);cursor:pointer}
-.octbtns{display:flex;gap:4px}
-.obtn{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 3px;
-  font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);cursor:pointer;transition:all .2s;text-align:center}
-.obtn:hover{border-color:var(--accent);color:var(--text)}
-.ch-f .obtn.active{background:rgba(124,92,252,.2);border-color:var(--accent);color:var(--accent)}
-.ch-t .obtn.active{background:rgba(252,92,156,.2);border-color:var(--accent2);color:var(--accent2)}
-.ch-5 .obtn.active{background:rgba(92,252,216,.2);border-color:var(--accent3);color:var(--accent3)}
-.playbtn{width:100%;padding:10px;border-radius:8px;border:none;font-family:'Syne',sans-serif;font-size:13px;
-  font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;
-  gap:6px;margin-top:12px;letter-spacing:.04em}
-.playbtn:disabled{opacity:.3;cursor:not-allowed}
-.ch-f .playbtn{background:var(--accent);color:#fff}
-.ch-t .playbtn{background:var(--accent2);color:#fff}
-.ch-5 .playbtn{background:var(--accent3);color:#0a0a0f}
-.playbtn:not(:disabled):hover{transform:scale(1.03);filter:brightness(1.1)}
-.solbtn{background:none;border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:10px;
-  font-family:'Space Mono',monospace;cursor:pointer;color:var(--dim);transition:all .2s;margin-top:6px;width:100%}
-.ch-f .solbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(124,92,252,.1)}
-.ch-t .solbtn.on{border-color:var(--accent2);color:var(--accent2);background:rgba(252,92,156,.1)}
-.ch-5 .solbtn.on{border-color:var(--accent3);color:var(--accent3);background:rgba(92,252,216,.1)}
 
 /* master */
 .mrow{display:flex;gap:9px;flex-wrap:wrap}
@@ -173,15 +160,35 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
 .status.ok .dot{background:var(--accent3)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-/* upload progress */
+/* upload progress (admin side) */
 .upload-bar-wrap{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:8px;display:none}
 .upload-bar{height:100%;width:0%;background:linear-gradient(to right,var(--accent),var(--accent3));transition:width .2s;border-radius:2px}
+
+/* admin upload status */
+.upload-status{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent3);margin-top:8px;display:none}
+
+/* ─── AUDIO HISTORY ─── */
+.audio-history{margin-top:14px}
+.audio-history-title{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--accent2);font-family:'Space Mono',monospace;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.audio-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:7px;transition:border-color .2s}
+.audio-item:hover{border-color:rgba(124,92,252,.25)}
+.audio-item-name{font-family:'Space Mono',monospace;font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audio-item-by{font-family:'Space Mono',monospace;font-size:9px;color:var(--dim);margin-top:2px}
+.audio-item-info{flex:1;min-width:0}
+.audio-load-btn{background:none;border:1px solid var(--accent);border-radius:5px;padding:4px 9px;font-size:10px;font-family:'Space Mono',monospace;cursor:pointer;color:var(--accent);transition:all .2s;flex-shrink:0}
+.audio-load-btn:hover{background:rgba(124,92,252,.15)}
+.audio-del-btn{background:none;border:1px solid var(--border);border-radius:5px;padding:4px 7px;font-size:10px;font-family:'Space Mono',monospace;cursor:pointer;color:var(--dim);transition:all .2s;flex-shrink:0}
+.audio-del-btn:hover{border-color:var(--red);color:var(--red)}
+.audio-active-badge{background:rgba(92,252,216,.1);border:1px solid rgba(92,252,216,.3);color:var(--accent3);font-family:'Space Mono',monospace;font-size:9px;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.no-history{font-family:'Space Mono',monospace;font-size:11px;color:var(--dim);text-align:center;padding:14px;background:rgba(255,255,255,.02);border-radius:8px}
 
 /* ─── CHAT SIDEBAR ─── */
 .chat-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;height:500px}
 .chat-head{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .chat-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
 .chat-online{font-family:'Space Mono',monospace;font-size:10px;color:var(--green)}
+.chat-clear-btn{background:none;border:1px solid var(--border);border-radius:5px;padding:3px 9px;font-size:10px;font-family:'Space Mono',monospace;cursor:pointer;color:var(--dim);transition:all .2s}
+.chat-clear-btn:hover{border-color:var(--red);color:var(--red)}
 .chat-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
 .chat-msgs::-webkit-scrollbar{width:4px}
 .chat-msgs::-webkit-scrollbar-track{background:transparent}
@@ -226,9 +233,6 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
 .pbar-wrap{width:260px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
 .pbar{height:100%;width:0%;background:linear-gradient(to right,var(--accent),var(--accent2));transition:width .3s;border-radius:2px}
 .divider{height:1px;background:linear-gradient(to right,transparent,var(--border),transparent);margin:4px 0 16px}
-
-/* admin upload status */
-.upload-status{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent3);margin-top:8px;display:none}
 </style>
 </head>
 <body>
@@ -297,7 +301,7 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
     <!-- MAIN COLUMN -->
     <div class="main-col">
 
-      <!-- ÁUDIO CARD: admin vê upload, outros veem player -->
+      <!-- ÁUDIO CARD -->
       <div class="card" id="audioCard">
         <div class="clabel">01 — Áudio</div>
 
@@ -314,13 +318,39 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
             <div class="upload-bar" id="uploadBar"></div>
           </div>
           <div class="upload-status" id="uploadStatus">✓ Áudio enviado para todos</div>
+
+          <!-- Audio History for Admin -->
+          <div class="audio-history" id="adminAudioHistory">
+            <div class="audio-history-title">
+              <span>🎵 Áudios Armazenados</span>
+            </div>
+            <div id="audioHistoryList"></div>
+          </div>
         </div>
 
         <!-- LISTENER: receive audio from admin -->
         <div id="listenerAudioSection" style="display:none">
+          <!-- Upload progress bar for listeners -->
+          <div class="listener-upload-progress" id="listenerUploadProgress">
+            <div class="lup-label">
+              <span class="pulse-dot"></span>
+              <span id="lup-name">Administrador enviando áudio...</span>
+            </div>
+            <div class="lup-bar-bg"><div class="lup-bar" id="lupBar"></div></div>
+            <div class="lup-pct" id="lupPct">0%</div>
+          </div>
+
           <div class="listener-audio" id="listenerAudioBox">
             <div class="audio-ready" id="audioReadyMsg">⏳ Aguardando áudio do administrador...</div>
             <audio id="remoteAudio" class="audio-player" controls style="display:none"></audio>
+          </div>
+
+          <!-- Audio History for Listeners -->
+          <div class="audio-history" id="listenerAudioHistory" style="margin-top:14px">
+            <div class="audio-history-title">
+              <span>🎵 Áudios Disponíveis</span>
+            </div>
+            <div id="listenerHistoryList"></div>
           </div>
         </div>
 
@@ -336,12 +366,13 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
         <div class="theory" id="theory">Selecione uma nota para ver as harmonias geradas</div>
       </div>
 
-      <!-- CANAIS -->
+      <!-- CANAIS — apenas volume por canal, 1 botão de reprodução global -->
       <div class="card">
         <div class="clabel">03 — Canais Independentes</div>
         <h2>Vozes</h2>
         <div class="divider"></div>
         <div class="channels">
+          <!-- Canal 0: Original -->
           <div class="ch ch-f">
             <div class="chhead"><span class="chname">Original</span><span class="badge">FUND.</span></div>
             <div class="pinfo" id="pi0">Tom: <b id="nd0">—</b> &nbsp;·&nbsp; <b id="st0">0 st</b></div>
@@ -349,18 +380,9 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
               <div class="clrow"><span>Volume</span><span class="v" id="vd0">100%</span></div>
               <input type="range" id="v0" min="0" max="150" value="100">
             </div>
-            <div class="crow">
-              <div class="clrow"><span>Oitavador</span></div>
-              <div class="octbtns" data-ch="0">
-                <button class="obtn" data-o="-2">-2</button><button class="obtn" data-o="-1">-1</button>
-                <button class="obtn active" data-o="0">0</button>
-                <button class="obtn" data-o="1">+1</button><button class="obtn" data-o="2">+2</button>
-              </div>
-            </div>
-            <button class="solbtn" data-ch="0">SOLO</button>
-            <button class="playbtn" id="pb0" disabled>▶ Reproduzir</button>
           </div>
 
+          <!-- Canal 1: Segunda Voz -->
           <div class="ch ch-t">
             <div class="chhead"><span class="chname">Segunda Voz</span><span class="badge">3ª MAIOR</span></div>
             <div class="pinfo" id="pi1">Tom: <b id="nd1">—</b> &nbsp;·&nbsp; <b id="st1">+4 st</b></div>
@@ -368,18 +390,9 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
               <div class="clrow"><span>Volume</span><span class="v" id="vd1">80%</span></div>
               <input type="range" id="v1" min="0" max="150" value="80">
             </div>
-            <div class="crow">
-              <div class="clrow"><span>Oitavador</span></div>
-              <div class="octbtns" data-ch="1">
-                <button class="obtn" data-o="-2">-2</button><button class="obtn" data-o="-1">-1</button>
-                <button class="obtn active" data-o="0">0</button>
-                <button class="obtn" data-o="1">+1</button><button class="obtn" data-o="2">+2</button>
-              </div>
-            </div>
-            <button class="solbtn" data-ch="1">SOLO</button>
-            <button class="playbtn" id="pb1" disabled>▶ Reproduzir</button>
           </div>
 
+          <!-- Canal 2: Quinta Voz -->
           <div class="ch ch-5">
             <div class="chhead"><span class="chname">Quinta Voz</span><span class="badge">5ª JUSTA</span></div>
             <div class="pinfo" id="pi2">Tom: <b id="nd2">—</b> &nbsp;·&nbsp; <b id="st2">+7 st</b></div>
@@ -387,16 +400,6 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
               <div class="clrow"><span>Volume</span><span class="v" id="vd2">80%</span></div>
               <input type="range" id="v2" min="0" max="150" value="80">
             </div>
-            <div class="crow">
-              <div class="clrow"><span>Oitavador</span></div>
-              <div class="octbtns" data-ch="2">
-                <button class="obtn" data-o="-2">-2</button><button class="obtn" data-o="-1">-1</button>
-                <button class="obtn active" data-o="0">0</button>
-                <button class="obtn" data-o="1">+1</button><button class="obtn" data-o="2">+2</button>
-              </div>
-            </div>
-            <button class="solbtn" data-ch="2">SOLO</button>
-            <button class="playbtn" id="pb2" disabled>▶ Reproduzir</button>
           </div>
         </div>
       </div>
@@ -424,6 +427,7 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
       <div class="chat-box">
         <div class="chat-head">
           <div class="chat-title">💬 Chat ao Vivo <span class="chat-online" id="chatOnlineCount"></span></div>
+          <button class="chat-clear-btn" id="clearChatBtn" title="Limpar conversa">🗑 Limpar</button>
         </div>
         <div class="chat-msgs" id="chatMsgs"></div>
         <div class="chat-input-row">
@@ -440,8 +444,7 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
 
 <script>
 // ══════════════════════════════════════════════════════
-// FIREBASE CONFIG — Substitua pelos seus dados!
-// Crie em https://console.firebase.google.com
+// FIREBASE CONFIG
 // ══════════════════════════════════════════════════════
 const firebaseConfig = {
   apiKey: "AIzaSyAZ3dBIKuYoenF3ddcdT36JbJXqaVdSwm0",
@@ -454,18 +457,13 @@ const firebaseConfig = {
   measurementId: "G-8LEWF4BYHW"
 };
 
-// ADMIN EMAIL — o único que pode fazer upload de áudio
 const ADMIN_EMAIL = "romerson3d@gmail.com";
-
-// ── Allowed users list (max 10 + admin = 11 total, but we keep 10 regular slots)
-// Firebase Authentication controla o acesso. Apenas emails cadastrados entram.
-// Para adicionar usuários, crie contas pelo painel do Firebase Auth ou pelo
-// formulário de registro neste app.
+const CLOUDINARY_CLOUD = 'dc0ulekxw';
+const CLOUDINARY_PRESET = 'do0snhuq';
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.database();
-// Storage removido — áudio via Realtime Database (base64), plano gratuito
 
 let currentUser = null;
 let isAdmin     = false;
@@ -521,10 +519,8 @@ auth.onAuthStateChanged(async user => {
     isAdmin = user.email === ADMIN_EMAIL;
     displayName = user.displayName || user.email.split('@')[0];
 
-    // persist user info
     await db.ref('users/'+user.uid).update({name: displayName, email: user.email, role: isAdmin?'admin':'user'});
 
-    // presence
     onlineRef = db.ref('presence/'+user.uid);
     onlineRef.set({name: displayName, email: user.email, online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP});
     onlineRef.onDisconnect().update({online: false});
@@ -541,12 +537,10 @@ auth.onAuthStateChanged(async user => {
 function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'block';
-
   document.getElementById('userAvatar').textContent = displayName[0].toUpperCase();
   document.getElementById('userNameDisplay').childNodes[0].textContent = displayName + ' ';
   document.getElementById('userEmailDisplay').textContent = currentUser.email;
   if (isAdmin) document.getElementById('adminBadge').style.display = 'inline';
-
   if (isAdmin) {
     document.getElementById('adminAudioSection').style.display = 'block';
   } else {
@@ -573,7 +567,11 @@ function translateAuthError(code) {
 function initApp() {
   listenOnlineUsers();
   listenChat();
-  if (!isAdmin) listenAdminAudio();
+  listenAudioHistory();
+  if (!isAdmin) {
+    listenAdminAudio();
+    listenUploadProgress();
+  }
 }
 
 function listenOnlineUsers() {
@@ -582,7 +580,6 @@ function listenOnlineUsers() {
     const list = document.getElementById('usersList');
     const onlineCount = Object.values(data).filter(u => u.online).length;
     document.getElementById('chatOnlineCount').textContent = onlineCount + ' online';
-
     list.innerHTML = '';
     Object.entries(data).forEach(([uid, u]) => {
       const row = document.createElement('div');
@@ -642,17 +639,145 @@ document.getElementById('chatInput').addEventListener('keydown', e => {
   }
 });
 
+// Clear chat — apenas limpa localmente para o usuário
+document.getElementById('clearChatBtn').onclick = () => {
+  if (confirm('Limpar todas as mensagens da sua visualização?')) {
+    document.getElementById('chatMsgs').innerHTML = '';
+  }
+};
+
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ══════════════════════════════════════════════════════
-// AUDIO — Upload via Cloudinary (gratuito, até 25GB)
-// Firebase Realtime DB salva só a URL do áudio
+// UPLOAD PROGRESS — admin publica progresso no Firebase
+// para que listeners possam ver a barra
 // ══════════════════════════════════════════════════════
-const CLOUDINARY_CLOUD = 'dc0ulekxw';
-const CLOUDINARY_PRESET = 'do0snhuq';
+function publishUploadProgress(pct, fileName) {
+  db.ref('session/uploadProgress').set({ pct, fileName, ts: firebase.database.ServerValue.TIMESTAMP });
+}
+function clearUploadProgress() {
+  db.ref('session/uploadProgress').remove();
+}
 
+function listenUploadProgress() {
+  db.ref('session/uploadProgress').on('value', snap => {
+    const data = snap.val();
+    const progressEl = document.getElementById('listenerUploadProgress');
+    if (data && data.pct < 100) {
+      progressEl.style.display = 'block';
+      document.getElementById('lup-name').textContent = `Recebendo: ${data.fileName || 'áudio'}`;
+      document.getElementById('lupBar').style.width = data.pct + '%';
+      document.getElementById('lupPct').textContent = data.pct + '%';
+    } else {
+      progressEl.style.display = 'none';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// AUDIO HISTORY — armazenado no Firebase
+// ══════════════════════════════════════════════════════
+function listenAudioHistory() {
+  db.ref('audioHistory').on('value', snap => {
+    const data = snap.val() || {};
+    renderAudioHistory(data);
+  });
+}
+
+function renderAudioHistory(data) {
+  const entries = Object.entries(data).sort((a,b) => b[1].uploadedAt - a[1].uploadedAt);
+
+  // Admin list
+  const adminList = document.getElementById('audioHistoryList');
+  if (adminList) {
+    if (entries.length === 0) {
+      adminList.innerHTML = '<div class="no-history">Nenhum áudio armazenado</div>';
+    } else {
+      adminList.innerHTML = '';
+      entries.forEach(([key, item]) => {
+        const div = document.createElement('div');
+        div.className = 'audio-item';
+        const isActive = item.isActive;
+        div.innerHTML = `
+          <div class="audio-item-info">
+            <div class="audio-item-name" title="${escHtml(item.name)}">${escHtml(item.name)}</div>
+            <div class="audio-item-by">${item.uploadedBy || '?'}</div>
+          </div>
+          ${isActive ? '<span class="audio-active-badge">ATIVO</span>' : ''}
+          <button class="audio-load-btn" onclick="activateAudio('${key}')">▶ Usar</button>
+          ${isAdmin ? `<button class="audio-del-btn" onclick="deleteAudio('${key}')">✕</button>` : ''}
+        `;
+        adminList.appendChild(div);
+      });
+    }
+  }
+
+  // Listener list
+  const listenerList = document.getElementById('listenerHistoryList');
+  if (listenerList) {
+    if (entries.length === 0) {
+      listenerList.innerHTML = '<div class="no-history">Nenhum áudio disponível</div>';
+    } else {
+      listenerList.innerHTML = '';
+      entries.forEach(([key, item]) => {
+        const div = document.createElement('div');
+        div.className = 'audio-item';
+        const isActive = item.isActive;
+        div.innerHTML = `
+          <div class="audio-item-info">
+            <div class="audio-item-name" title="${escHtml(item.name)}">${escHtml(item.name)}</div>
+            <div class="audio-item-by">${item.uploadedBy || '?'}</div>
+          </div>
+          ${isActive ? '<span class="audio-active-badge">ATIVO</span>' : ''}
+          <button class="audio-load-btn" onclick="loadAudioFromUrl('${item.url}')">▶ Carregar</button>
+          ${isAdmin ? `<button class="audio-del-btn" onclick="deleteAudio('${key}')">✕</button>` : ''}
+        `;
+        listenerList.appendChild(div);
+      });
+    }
+  }
+}
+
+async function activateAudio(key) {
+  const snap = await db.ref('audioHistory/' + key).once('value');
+  const item = snap.val();
+  if (!item) return;
+
+  // Mark all inactive, then active this one
+  const allSnap = await db.ref('audioHistory').once('value');
+  const all = allSnap.val() || {};
+  const updates = {};
+  Object.keys(all).forEach(k => { updates['audioHistory/' + k + '/isActive'] = false; });
+  updates['audioHistory/' + key + '/isActive'] = true;
+  await db.ref().update(updates);
+
+  // Set as current session audio
+  await db.ref('session').set({
+    audioUrl: item.url,
+    audioName: item.name,
+    uploadedBy: item.uploadedBy,
+    uploadedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+
+  // Process locally
+  ensureActx();
+  const resp = await fetch(item.url);
+  const ab = await resp.arrayBuffer();
+  origBuf = await actx.decodeAudioData(ab);
+  drawWave(origBuf);
+  await doProc();
+}
+
+async function deleteAudio(key) {
+  if (!confirm('Excluir este áudio do histórico?')) return;
+  await db.ref('audioHistory/' + key).remove();
+}
+
+// ══════════════════════════════════════════════════════
+// AUDIO — Upload via Cloudinary, URL no Firebase
+// ══════════════════════════════════════════════════════
 function listenAdminAudio() {
   db.ref('session/audioUrl').on('value', snap => {
     const url = snap.val();
@@ -705,15 +830,16 @@ async function uploadAndBroadcast(file) {
   barWrap.style.display = 'block';
   bar.style.width = '5%';
 
+  // Publish progress=1 so listeners see the bar immediately
+  publishUploadProgress(1, file.name);
   showOverlay(true, 'Enviando para Cloudinary...', 5);
   setStatus('proc', 'Enviando...');
 
   try {
-    // Upload para Cloudinary via FormData
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_PRESET);
-    formData.append('resource_type', 'video'); // Cloudinary usa 'video' para áudio
+    formData.append('resource_type', 'video');
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`);
@@ -723,6 +849,8 @@ async function uploadAndBroadcast(file) {
         const pct = Math.round(e.loaded / e.total * 80);
         bar.style.width = pct + '%';
         showOverlay(true, `Enviando... ${pct}%`, pct);
+        // Publish real progress to Firebase for listeners
+        publishUploadProgress(pct, file.name);
       }
     };
 
@@ -737,9 +865,10 @@ async function uploadAndBroadcast(file) {
 
     const url = result.secure_url;
     bar.style.width = '90%';
+    publishUploadProgress(90, file.name);
     showOverlay(true, 'Notificando usuários...', 90);
 
-    // Salva só a URL no Firebase
+    // Save URL to Firebase session
     await db.ref('session').set({
       audioUrl: url,
       audioName: file.name,
@@ -747,7 +876,23 @@ async function uploadAndBroadcast(file) {
       uploadedAt: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // Mensagem no chat
+    // Save to audio history
+    const histKey = db.ref('audioHistory').push().key;
+    await db.ref('audioHistory/' + histKey).set({
+      url,
+      name: file.name,
+      uploadedBy: displayName,
+      uploadedAt: firebase.database.ServerValue.TIMESTAMP,
+      isActive: true
+    });
+    // Mark others inactive
+    const allSnap = await db.ref('audioHistory').once('value');
+    const all = allSnap.val() || {};
+    const updates = {};
+    Object.keys(all).forEach(k => { if (k !== histKey) updates['audioHistory/' + k + '/isActive'] = false; });
+    if (Object.keys(updates).length > 0) await db.ref().update(updates);
+
+    // System chat message
     await db.ref('chat').push({
       type: 'system',
       text: `🎵 ${displayName} enviou: ${file.name}`,
@@ -755,24 +900,27 @@ async function uploadAndBroadcast(file) {
     });
 
     bar.style.width = '100%';
+    publishUploadProgress(100, file.name);
     document.getElementById('uploadStatus').style.display = 'block';
     barWrap.style.display = 'none';
     showOverlay(false);
+    clearUploadProgress();
 
-    // Admin processa localmente
+    // Admin processes locally
     ensureActx();
     origBuf = await actx.decodeAudioData(await file.arrayBuffer());
     drawWave(origBuf);
     await doProc();
 
   } catch(e) {
+    clearUploadProgress();
     showOverlay(false);
     setStatus('', 'Erro no upload: ' + e.message);
   }
 }
 
 // ══════════════════════════════════════════════════════
-// PHASE VOCODER (unchanged from original)
+// PHASE VOCODER (unchanged)
 // ══════════════════════════════════════════════════════
 function fft(re, im, inverse) {
   const n=re.length;
@@ -882,7 +1030,7 @@ async function pitchShift(audioBuffer, semitones, onProgress) {
 }
 
 // ══════════════════════════════════════════════════════
-// APP STATE (same as original)
+// APP STATE
 // ══════════════════════════════════════════════════════
 const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const LABELS=['Dó','Ré♭','Ré','Mi♭','Mi','Fá','Sol♭','Sol','Lá♭','Lá','Si♭','Si'];
@@ -890,7 +1038,7 @@ const IVLS=[0,4,7];
 
 let actx=null, origBuf=null, pBufs=[null,null,null];
 let keyIdx=0, octs=[0,0,0], vols=[1.0,0.8,0.8];
-let soloIdx=-1, srcs=[null,null,null], gNodes=[null,null,null];
+let srcs=[null,null,null], gNodes=[null,null,null];
 
 // key grid
 (function(){
@@ -920,19 +1068,6 @@ function refreshInfo(){
   document.getElementById('theory').textContent=`${r} fundamental → ${t} terceira maior (+4st) → ${f} quinta justa (+7st)`;
 }
 
-document.querySelectorAll('.octbtns').forEach(g=>{
-  const ch=+g.dataset.ch;
-  g.querySelectorAll('.obtn').forEach(b=>{
-    b.onclick=()=>{
-      g.querySelectorAll('.obtn').forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      octs[ch]=+b.dataset.o;
-      refreshInfo();
-      if(origBuf) schedProc();
-    };
-  });
-});
-
 const slColors=['var(--accent)','var(--accent2)','var(--accent3)'];
 [0,1,2].forEach(ch=>{
   const sl=document.getElementById('v'+ch);
@@ -942,31 +1077,13 @@ const slColors=['var(--accent)','var(--accent2)','var(--accent3)'];
     const p=(sl.value/150*100).toFixed(1);
     sl.style.background=`linear-gradient(to right,${slColors[ch]} ${p}%,var(--border) ${p}%)`;
     if(gNodes[ch]&&actx){
-      const eff=(soloIdx!==-1&&soloIdx!==ch)?0:vols[ch];
-      gNodes[ch].gain.setTargetAtTime(eff,actx.currentTime,0.01);
+      gNodes[ch].gain.setTargetAtTime(vols[ch],actx.currentTime,0.01);
     }
   };
   sl.addEventListener('input',upd); upd();
 });
 
-document.querySelectorAll('.solbtn').forEach(b=>{
-  const ch=+b.dataset.ch;
-  b.onclick=()=>{
-    soloIdx=soloIdx===ch?-1:ch;
-    document.querySelectorAll('.solbtn').forEach((x,i)=>{
-      x.classList.toggle('on',i===soloIdx);
-      x.textContent=(i===soloIdx)?'● SOLO':'SOLO';
-    });
-    [0,1,2].forEach(i=>{
-      if(gNodes[i]&&actx){
-        const v=(soloIdx!==-1&&soloIdx!==i)?0:vols[i];
-        gNodes[i].gain.setTargetAtTime(v,actx.currentTime,0.02);
-      }
-    });
-  };
-});
-
-[0,1,2].forEach(ch=>{document.getElementById('pb'+ch).onclick=()=>srcs[ch]?stopCh(ch):playCh(ch);});
+// Single play all button
 document.getElementById('playAllBtn').onclick=()=>[0,1,2].forEach(playCh);
 document.getElementById('stopBtn').onclick=stopAll;
 document.getElementById('expBtn').onclick=exportMix;
@@ -980,15 +1097,13 @@ function playCh(ch){
   if(!pBufs[ch]) return;
   stopCh(ch); ensureActx();
   const s=actx.createBufferSource(); s.buffer=pBufs[ch];
-  const g=actx.createGain(); g.gain.value=(soloIdx!==-1&&soloIdx!==ch)?0:vols[ch];
+  const g=actx.createGain(); g.gain.value=vols[ch];
   s.connect(g); g.connect(actx.destination); s.start();
   srcs[ch]=s; gNodes[ch]=g;
-  s.onended=()=>{srcs[ch]=null;setBtn(ch,false);};
-  setBtn(ch,true);
+  s.onended=()=>{srcs[ch]=null;};
 }
-function stopCh(ch){if(srcs[ch]){try{srcs[ch].stop()}catch(e){}srcs[ch]=null;} setBtn(ch,false);}
+function stopCh(ch){if(srcs[ch]){try{srcs[ch].stop()}catch(e){}srcs[ch]=null;}}
 function stopAll(){[0,1,2].forEach(stopCh);}
-function setBtn(ch,playing){document.getElementById('pb'+ch).textContent=playing?'■ Parar':'▶ Reproduzir';}
 
 let procTimer=null;
 function schedProc(){clearTimeout(procTimer);procTimer=setTimeout(doProc,300);}
@@ -1006,7 +1121,6 @@ async function doProc(){
       });
     }
     showOverlay(false,'',100);
-    [0,1,2].forEach(ch=>{document.getElementById('pb'+ch).disabled=false;});
     document.getElementById('playAllBtn').disabled=false;
     document.getElementById('expBtn').disabled=false;
     setStatus('ok','Pronto ✓  Fundamental · 3ª Maior · 5ª Justa geradas');
@@ -1083,28 +1197,6 @@ function toWav(buf){
 }
 
 refreshInfo();
-</script>
-
-<!-- ─── SETUP GUIDE (shown only when Firebase not configured) ─── -->
-<div id="setupGuide" style="display:none !important;position:fixed;inset:0;background:rgba(10,10,15,.97);z-index:999;
-  display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px">
-  <div style="max-width:560px;background:#12121a;border:1px solid #2a2a40;border-radius:20px;padding:32px;text-align:left">
-    <div style="font-size:10px;letter-spacing:.4em;color:#7c5cfc;font-family:'Space Mono',monospace;margin-bottom:12px;text-transform:uppercase">● Configuração necessária</div>
-    <h2 style="font-size:20px;font-weight:800;color:#e8e8f0;margin-bottom:16px">Configure o Firebase</h2>
-    <div style="font-family:'Space Mono',monospace;font-size:11px;color:#7070a0;line-height:1.8">
-      <p style="margin-bottom:12px">Para usar este app você precisa de um projeto Firebase gratuito:</p>
-      <ol style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
-        <li>Acesse <a href="https://console.firebase.google.com" target="_blank" style="color:#5cfcd8">console.firebase.google.com</a></li>
-        <li>Crie um projeto e ative: <b style="color:#e8e8f0">Authentication</b> (email/senha) e <b style="color:#e8e8f0">Realtime Database</b> — Storage <b style="color:#fc5c9c">não é necessário</b> (áudio via base64)</li>
-        <li>Copie as configurações do projeto e substitua o objeto <b style="color:#7c5cfc">firebaseConfig</b> no código</li>
-        <li>Mude <b style="color:#fc5c9c">ADMIN_EMAIL</b> para o seu e-mail</li>
-      </ol>
-    </div>
-  </div>
-</div>
-
-<script>
-// Firebase já configurado — guia de setup desativado
 </script>
 </body>
 </html>
