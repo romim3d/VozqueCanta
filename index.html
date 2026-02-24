@@ -647,55 +647,42 @@ function escHtml(s) {
 }
 
 // ══════════════════════════════════════════════════════
-// AUDIO — Admin converte para base64 e salva no Realtime DB
-// Sem Firebase Storage (plano gratuito Spark)
-// ATENÇÃO: funciona bem para arquivos até ~5MB.
-// Para arquivos maiores, comprima o MP3 antes de enviar.
+// AUDIO — Upload via Cloudinary (gratuito, até 25GB)
+// Firebase Realtime DB salva só a URL do áudio
 // ══════════════════════════════════════════════════════
-
-// Limite orientativo: 5MB em base64 (~3.75MB de áudio original)
-const MAX_AUDIO_MB = 5;
+const CLOUDINARY_CLOUD = 'dc0ulekxw';
+const CLOUDINARY_PRESET = 'do0snhuq';
 
 function listenAdminAudio() {
-  db.ref('session/audioB64').on('value', snap => {
-    const data = snap.val();
-    if (!data) return;
+  db.ref('session/audioUrl').on('value', snap => {
+    const url = snap.val();
+    if (!url) return;
     document.getElementById('audioReadyMsg').style.display = 'none';
-    // Converte base64 de volta para blob URL para o player
-    try {
-      const byteStr = atob(data.b64);
-      const ab = new ArrayBuffer(byteStr.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
-      const blob = new Blob([ab], {type: data.mime || 'audio/mpeg'});
-      const url  = URL.createObjectURL(blob);
-      const audio = document.getElementById('remoteAudio');
-      audio.style.display = 'block';
-      audio.src = url;
-      // Carrega para processamento
-      loadAudioFromArrayBuffer(ab.slice(0));
-    } catch(e) {
-      setStatus('', 'Erro ao receber áudio: ' + e.message);
-    }
+    const audio = document.getElementById('remoteAudio');
+    audio.style.display = 'block';
+    audio.src = url;
+    loadAudioFromUrl(url);
   });
 }
 
-async function loadAudioFromArrayBuffer(ab) {
+async function loadAudioFromUrl(url) {
   showOverlay(true, 'Carregando áudio...', 5);
   setStatus('proc', 'Carregando...');
   ensureActx();
   try {
+    const resp = await fetch(url);
+    const ab   = await resp.arrayBuffer();
     origBuf = await actx.decodeAudioData(ab);
     drawWave(origBuf);
     showOverlay(false);
     await doProc();
   } catch(e) {
     showOverlay(false);
-    setStatus('', 'Erro ao decodificar: ' + e.message);
+    setStatus('', 'Erro ao carregar: ' + e.message);
   }
 }
 
-// Admin: lê arquivo, converte para base64 e salva no Realtime Database
+// Admin: upload para Cloudinary, salva URL no Firebase
 document.getElementById('fileIn').addEventListener('change', e => {
   if (e.target.files[0] && isAdmin) uploadAndBroadcast(e.target.files[0]);
 });
@@ -709,13 +696,6 @@ dz.addEventListener('drop', e=>{
 });
 
 async function uploadAndBroadcast(file) {
-  // Aviso de tamanho
-  const mb = file.size / 1024 / 1024;
-  if (mb > MAX_AUDIO_MB) {
-    setStatus('', `⚠️ Arquivo muito grande (${mb.toFixed(1)}MB). Use um MP3 comprimido com menos de ${MAX_AUDIO_MB}MB.`);
-    return;
-  }
-
   const fn = document.getElementById('fname');
   fn.textContent = '🎵 ' + file.name;
   fn.style.display = 'inline-block';
@@ -723,31 +703,46 @@ async function uploadAndBroadcast(file) {
   const barWrap = document.getElementById('uploadBarWrap');
   const bar     = document.getElementById('uploadBar');
   barWrap.style.display = 'block';
-  bar.style.width = '10%';
+  bar.style.width = '5%';
 
-  showOverlay(true, 'Convertendo áudio...', 10);
-  setStatus('proc', 'Convertendo...');
+  showOverlay(true, 'Enviando para Cloudinary...', 5);
+  setStatus('proc', 'Enviando...');
 
   try {
-    // Lê como ArrayBuffer
-    const ab = await file.arrayBuffer();
-    bar.style.width = '40%';
-    showOverlay(true, 'Codificando base64...', 40);
+    // Upload para Cloudinary via FormData
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('resource_type', 'video'); // Cloudinary usa 'video' para áudio
 
-    // Converte para base64 em chunks para não travar a UI
-    const uint8 = new Uint8Array(ab);
-    let binary = '';
-    const CHUNK = 8192;
-    for (let i = 0; i < uint8.length; i += CHUNK) {
-      binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK));
-    }
-    const b64 = btoa(binary);
-    bar.style.width = '70%';
-    showOverlay(true, 'Enviando para todos...', 70);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`);
 
-    // Salva no Realtime Database
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 80);
+        bar.style.width = pct + '%';
+        showOverlay(true, `Enviando... ${pct}%`, pct);
+      }
+    };
+
+    const result = await new Promise((resolve, reject) => {
+      xhr.onload = () => {
+        if (xhr.status === 200) resolve(JSON.parse(xhr.responseText));
+        else reject(new Error('Erro Cloudinary: ' + xhr.responseText));
+      };
+      xhr.onerror = () => reject(new Error('Erro de rede'));
+      xhr.send(formData);
+    });
+
+    const url = result.secure_url;
+    bar.style.width = '90%';
+    showOverlay(true, 'Notificando usuários...', 90);
+
+    // Salva só a URL no Firebase
     await db.ref('session').set({
-      audioB64: { b64, mime: file.type, name: file.name },
+      audioUrl: url,
+      audioName: file.name,
       uploadedBy: displayName,
       uploadedAt: firebase.database.ServerValue.TIMESTAMP
     });
@@ -762,17 +757,17 @@ async function uploadAndBroadcast(file) {
     bar.style.width = '100%';
     document.getElementById('uploadStatus').style.display = 'block';
     barWrap.style.display = 'none';
+    showOverlay(false);
 
     // Admin processa localmente
     ensureActx();
-    origBuf = await actx.decodeAudioData(ab);
+    origBuf = await actx.decodeAudioData(await file.arrayBuffer());
     drawWave(origBuf);
-    showOverlay(false);
     await doProc();
 
   } catch(e) {
     showOverlay(false);
-    setStatus('', 'Erro: ' + e.message);
+    setStatus('', 'Erro no upload: ' + e.message);
   }
 }
 
